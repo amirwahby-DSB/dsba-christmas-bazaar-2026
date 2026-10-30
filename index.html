@@ -1,4 +1,6 @@
-<!doctype html>
+from pathlib import Path
+
+html = r'''<!doctype html>
 <html lang="ar" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>حجز خيمة – بازار الكريسماس DSBA</title>
@@ -180,8 +182,9 @@ async function refreshBookings(){
  try{
   const snap=await getDocs(query(collection(db,'bookings'),orderBy('createdAt','desc'),limit(100)));
   const box=$('bookingList');
-  if(snap.empty){box.innerHTML='<p class="mu">لا توجد طلبات حتى الآن.</p>';return}
-  box.innerHTML=snap.docs.map(s=>{
+  const activeDocs=snap.docs.filter(s=>s.data().status!=='cancelled');
+  if(!activeDocs.length){box.innerHTML='<p class="mu">لا توجد طلبات نشطة حتى الآن.</p>';return}
+  box.innerHTML=activeDocs.map(s=>{
    const b=s.data(),id=s.id;
    const ids=(b.tentIds||[]).join('، ');
    return '<div class="card"><b>طلب '+safe(id)+'</b><div class="mu">الاسم: '+safe(b.name)+' · الهاتف: '+safe(b.phone)+'</div><div>الخيام: '+safe(ids)+' · الإجمالي: '+fmt(b.total)+' ج.م</div><div>الدفع: '+safe(b.paymentMethod)+' · الحالة: '+safe(b.status)+' · الدفع: '+safe(b.paymentStatus)+'</div><div class="row" style="margin-top:8px"><button data-confirm="'+safe(id)+'">تأكيد الدفع</button><button class="g" data-cancel="'+safe(id)+'">إلغاء وإتاحة الخيام</button></div></div>'
@@ -205,7 +208,12 @@ $('bookingList').addEventListener('click',async e=>{
    batch.update(bref,{status:'cancelled',paymentStatus:'unconfirmed',updatedAt:serverTimestamp()});
    for(const k of (b.tentIds||[])){
     const tr=doc(db,'tents',String(k)),ts=await getDoc(tr);
-    if(ts.exists()&&ts.data().bookingId===id)batch.update(tr,{status:'available',bookingId:null});
+    if(ts.exists()){
+     const td=ts.data();
+     if(td.bookingId===id||(!td.bookingId&&['pending','confirmed'].includes(td.status))){
+      batch.update(tr,{status:'available',bookingId:null});
+     }
+    }
    }
    await batch.commit();
   }
@@ -240,3 +248,8 @@ publicInit();
 if(location.hash==='#admin'){adminArea.classList.remove('hide');}
 
 </script></body></html>
+'''
+
+path = Path("/mnt/data/index.html")
+path.write_text(html, encoding="utf-8")
+print(f"تم إنشاء الملف: {path.name} — الحجم: {path.stat().st_size:,} بايت")
